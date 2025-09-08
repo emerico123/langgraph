@@ -9,7 +9,9 @@ from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_community.document_loaders import WebBaseLoader, PyPDFLoader, UnstructuredFileLoader
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-from langchain.schema import Document, HumanMessage, AIMessage
+#from langchain.schema import Document, HumanMessage, AIMessage
+from langchain_core.documents import Document
+from langchain_core.messages import HumanMessage, AIMessage
 from langgraph.graph import StateGraph, START, END
 from langgraph.graph.message import add_messages
 from langchain.schema.runnable import RunnablePassthrough
