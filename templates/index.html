@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Acorre RAG Chat Dashboard</title>
+        <style>
+            body {
+                font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+                max-width: 1400px; /* Increased max-width for dashboard layout */
+                margin: 0 auto;
+                padding: 20px;
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                min-height: 100vh;
+                color: #333;
+            }
+            .container {
+                background: white;
+                border-radius: 15px;
+                padding: 30px;
+                box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            }
+            h1 {
+                text-align: center;
+                color: #333;
+                margin-bottom: 30px;
+                font-size: 2.5em;
+            }
+            .dashboard-grid {
+                display: grid;
+                grid-template-columns: 2fr 1fr; /* Chat wider than content management */
+                gap: 20px;
+            }
+            @media (max-width: 900px) {
+                .dashboard-grid {
+                    grid-template-columns: 1fr; /* Stack columns on smaller screens */
+                }
+            }
+            .section {
+                padding: 25px;
+                border: 1px solid #e0e0e0;
+                border-radius: 10px;
+                background: #fafafa;
+                margin-bottom: 0; /* Remove individual section margins, managed by grid gap */
+            }
+            .chat-section {
+                display: flex;
+                flex-direction: column;
+                height: 100%; /* Make chat section fill its grid cell height */
+            }
+            .content-management-section {
+                display: flex;
+                flex-direction: column;
+                height: 100%;
+            }
+            .section h2 {
+                color: #555;
+                margin-bottom: 20px;
+                border-bottom: 2px solid #667eea;
+                padding-bottom: 10px;
+            }
+            .form-group {
+                margin-bottom: 20px;
+            }
+            label {
+                display: block;
+                margin-bottom: 8px;
+                font-weight: 600;
+                color: #333;
+            }
+            input[type="text"], input[type="url"], textarea, input[type="file"] {
+                width: 100%;
+                padding: 12px;
+                border: 2px solid #ddd;
+                border-radius: 8px;
+                font-size: 16px;
+                transition: border-color 0.3s;
+            }
+            input[type="text"]:focus, input[type="url"]:focus, textarea:focus, input[type="file"]:focus {
+                outline: none;
+                border-color: #667eea;
+            }
+            button {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                color: white;
+                padding: 12px 30px;
+                border: none;
+                border-radius: 8px;
+                font-size: 16px;
+                cursor: pointer;
+                transition: transform 0.2s;
+            }
+            button:hover {
+                transform: translateY(-2px);
+            }
+            .delete-button {
+                background: #ff6b6b; /* Red color for delete */
+                padding: 5px 10px;
+                font-size: 0.8em;
+                border-radius: 5px;
+                margin-left: 10px;
+            }
+            .delete-button:hover {
+                background: #ff4757;
+            }
+            .tabs {
+                display: flex;
+                margin-bottom: 0px; /* Tabs content will provide margin */
+                border-bottom: 1px solid #e0e0e0;
+            }
+            .tab-button {
+                padding: 10px 20px;
+                cursor: pointer;
+                border: 1px solid transparent;
+                border-bottom: none;
+                background-color: #f0f0f0;
+                border-top-left-radius: 8px;
+                border-top-right-radius: 8px;
+                margin-right: 5px;
+                color: #555;
+                font-weight: 600;
+                transition: background-color 0.3s, color 0.3s;
+            }
+            .tab-button.active {
+                background-color: white;
+                border-color: #e0e0e0;
+                border-bottom-color: white;
+                color: #667eea;
+            }
+            .tab-content {
+                display: none;
+                padding: 25px;
+                border: 1px solid #e0e0e0;
+                border-top: none;
+                border-bottom-left-radius: 10px;
+                border-bottom-right-radius: 10px;
+                background: #fafafa;
+                margin-bottom: 20px; /* Space between tab content and next item */
+            }
+            .tab-content.active {
+                display: block;
+            }
+            .chat-window {
+                flex-grow: 1; /* Make chat window fill available space */
+                height: 400px;
+                border: 1px solid #e0e0e0;
+                border-radius: 10px;
+                background: #fff;
+                overflow-y: auto;
+                padding: 15px;
+                margin-bottom: 20px;
+                display: flex;
+                flex-direction: column;
+            }
+            .chat-message {
+                margin-bottom: 10px;
+                padding: 10px 15px;
+                border-radius: 15px;
+                max-width: 80%;
+            }
+            .user-message {
+                align-self: flex-end;
+                background-color: #e0f2f7; /* Light blue */
+                color: #333;
+                border-bottom-right-radius: 2px;
+            }
+            .ai-message {
+                align-self: flex-start;
+                background-color: #f0f0f0; /* Light gray */
+                color: #333;
+                border-bottom-left-radius: 2px;
+            }
+            .status {
+                padding: 10px;
+                border-radius: 5px;
+                margin-top: 10px;
+                font-weight: 600;
+            }
+            .success {
+                background: #d4edda;
+                color: #155724;
+                border: 1px solid #c3e6cb;
+            }
+            .error {
+                background: #f8d7da;
+                color: #721c24;
+                border: 1px solid #f5c6cb;
+            }
+            .info {
+                background: #d1ecf1;
+                color: #0c5460;
+                border: 1px solid #bee5eb;
+            }
+            .websites-list {
+                background: white;
+                padding: 15px;
+                border-radius: 8px;
+                border: 1px solid #ddd;
+                max-height: 200px; /* Increased height for visibility */
+                overflow-y: auto;
+                flex-grow: 1; /* Allow content list to grow */
+            }
+            .website-item {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                padding: 10px;
+                margin: 5px 0;
+                background: #f8f9fa;
+                border-radius: 5px;
+                border-left: 3px solid #667eea;
+            }
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <h1>💬 RAG Chat Dashboard</h1>
+
+            <div class="dashboard-grid">
+                <div class="section chat-section">
+                    <h2>🗣️ Conversation with RAG Assistant</h2>
+                    <div class="chat-window" id="chat-window">
+                        <div class="ai-message chat-message">Hello! Ask me anything about the websites or documents you've added, or general knowledge.</div>
+                    </div>
+                    <div class="form-group">
+                        <label for="chat-input">Your Message:</label>
+                        <textarea id="chat-input" rows="3" placeholder="Type your question here..." required></textarea>
+                    </div>
+                    <button onclick="sendMessage()">Send</button>
+                </div>
+
+                <div class="content-management-section">
+                    <div class="tabs">
+                        <button class="tab-button active" onclick="showTab('website-tab')">Add Website Content</button>
+                        <button class="tab-button" onclick="showTab('document-tab')">Upload Document</button>
+                    </div>
+
+                    <div id="website-tab" class="tab-content active">
+                        <h2>📚 Add Website Content</h2>
+                        <p>Enter a website URL to scrape and add its content to the RAG database.</p>
+                        <div class="form-group">
+                            <label for="website-url">Website URL:</label>
+                            <input type="url" id="website-url" placeholder="https://example.com" required>
+                        </div>
+                        <button onclick="addWebsite()">Add Website</button>
+                        <div id="add-status"></div>
+                    </div>
+
+                    <div id="document-tab" class="tab-content">
+                        <h2>📄 Upload Document</h2>
+                        <p>Upload a PDF, text, or other document to add its content to the RAG database.</p>
+                        <div class="form-group">
+                            <label for="document-upload">Choose Document:</label>
+                            <input type="file" id="document-upload" accept=".pdf,.txt,.html,.xml,.md,.csv,.xlsx" required>
+                        </div>
+                        <button onclick="uploadDocument()">Upload Document</button>
+                        <div id="upload-status"></div>
+                    </div>
+
+                    <div class="section">
+                        <h2>📋 Available Content Sources</h2>
+                        <p>Websites and documents currently stored in the RAG database:</p>
+                        <div id="websites-list" class="websites-list">
+                            <div class="website-item">Loading...</div>
+                        </div>
+                        <button onclick="refreshContentSources()">Refresh List</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // Configure the API base URL for this app.py's own API endpoints
+            const API_BASE_URL = "";
+
+            // Function to add a message to the chat window
+            function appendMessage(sender, message) {
+                const chatWindow = document.getElementById('chat-window');
+                const messageDiv = document.createElement('div');
+                messageDiv.classList.add('chat-message');
+                messageDiv.classList.add(sender + '-message');
+                messageDiv.innerHTML = message;
+                chatWindow.appendChild(messageDiv);
+                chatWindow.scrollTop = chatWindow.scrollHeight; // Auto-scroll to bottom
+            }
+
+            // Function to switch between tabs
+            function showTab(tabName) {
+                // Hide all tab content and deactivate all buttons
+                document.querySelectorAll('.tab-content').forEach(tab => {
+                    tab.classList.remove('active');
+                });
+                document.querySelectorAll('.tab-button').forEach(button => {
+                    button.classList.remove('active');
+                });
+
+                // Show the selected tab content and activate its button
+                document.getElementById(tabName).classList.add('active');
+                document.querySelector(`.tab-button[onclick="showTab(\'${tabName}\')"]`).classList.add('active');
+            }
+
+            async function addWebsite() {
+                const url = document.getElementById('website-url').value;
+                const statusDiv = document.getElementById('add-status');
+
+                if (!url) {
+                    statusDiv.innerHTML = '<div class="status error">Please enter a valid URL</div>';
+                    return;
+                }
+
+                statusDiv.innerHTML = '<div class="status info">Adding website...</div>';
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/add-website`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ url: url })
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        statusDiv.innerHTML = '<div class="status success">Website added successfully!</div>';
+                        document.getElementById('website-url').value = '';
+                        refreshContentSources();
+                    } else {
+                        statusDiv.innerHTML = '<div class="status error">Error: ' + result.detail + '</div>';
+                    }
+                } catch (error) {
+                    statusDiv.innerHTML = '<div class="status error">Error: ' + error.message + '</div>';
+                }
+            }
+
+            async function uploadDocument() {
+                const fileInput = document.getElementById('document-upload');
+                const uploadStatusDiv = document.getElementById('upload-status');
+
+                if (fileInput.files.length === 0) {
+                    uploadStatusDiv.innerHTML = '<div class="status error">Please select a file to upload.</div>';
+                    return;
+                }
+
+                const file = fileInput.files[0];
+                const formData = new FormData();
+                formData.append('file', file);
+
+                uploadStatusDiv.innerHTML = '<div class="status info">Uploading and processing document...</div>';
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/upload-document`, {
+                        method: 'POST',
+                        body: formData // FormData sets Content-Type automatically
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        uploadStatusDiv.innerHTML = '<div class="status success">Document uploaded and processed successfully!</div>';
+                        fileInput.value = ''; // Clear file input
+                        refreshContentSources();
+                    } else {
+                        uploadStatusDiv.innerHTML = '<div class="status error">Error: ' + result.detail + '</div>';
+                    }
+                } catch (error) {
+                    uploadStatusDiv.innerHTML = '<div class="status error">Error: ' + error.message + '</div>';
+                }
+            }
+
+            async function sendMessage() {
+                const chatInput = document.getElementById('chat-input');
+                const userQuery = chatInput.value.trim();
+
+                if (!userQuery) {
+                    return; // Don't send empty messages
+                }
+
+                // Add user message to chat window
+                appendMessage('user', userQuery);
+                chatInput.value = ''; // Clear input field
+                chatInput.style.height = 'auto'; // Reset textarea height
+
+                // Show a loading indicator
+                appendMessage('ai', '<em>Assistant is thinking...</em>');
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/query`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ query: userQuery })
+                    });
+
+                    const result = await response.json();
+
+                    // Remove loading indicator
+                    const chatWindow = document.getElementById('chat-window');
+                    chatWindow.lastChild.remove();
+
+                    if (response.ok) {
+                        appendMessage('ai', result.response);
+                    } else {
+                        appendMessage('ai', '<span class="status error">Error: ' + result.detail + '</div>');
+                    }
+                } catch (error) {
+                    // Remove loading indicator
+                    const chatWindow = document.getElementById('chat-window');
+                    chatWindow.lastChild.remove();
+                    appendMessage('ai', '<span class="status error">Error: ' + error.message + '</div>');
+                }
+            }
+
+            // Allow sending message with Enter key
+            document.getElementById('chat-input').addEventListener('keypress', function(e) {
+                if (e.key === 'Enter' && !e.shiftKey) { // Shift+Enter for new line
+                    e.preventDefault(); // Prevent new line
+                    sendMessage();
+                }
+            });
+
+            // Adjust textarea height dynamically
+            document.getElementById('chat-input').addEventListener('input', function() {
+                this.style.height = 'auto';
+                this.style.height = (this.scrollHeight) + 'px';
+            });
+
+            async function deleteContent(sourceToDelete) {
+                if (!confirm(`Are you sure you want to delete content from: ${sourceToDelete}?`)) {
+                    return;
+                }
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/delete-content`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                        },
+                        body: JSON.stringify({ source: sourceToDelete })
+                    });
+
+                    const result = await response.json();
+
+                    if (response.ok) { // Check for 2xx status codes (e.g., 200 OK)
+                        alert(`Successfully deleted: ${sourceToDelete}`);
+                        refreshContentSources(); // Refresh the list after deletion
+                    } else if (response.status === 404) { // Handle 404 Not Found specifically
+                        alert(`Content for source '${sourceToDelete}' not found for deletion.`);
+                        refreshContentSources(); // Refresh in case list was stale
+                    } else { // Handle other errors (e.g., 500 Internal Server Error)
+                        alert(`Error deleting content: ${result.detail || response.statusText}`);
+                    }
+                } catch (error) {
+                    alert(`Network error during deletion: ${error.message}`);
+                }
+            }
+
+            async function refreshContentSources() {
+                const listDiv = document.getElementById('websites-list');
+
+                try {
+                    const response = await fetch(`${API_BASE_URL}/get-content-sources`);
+                    const result = await response.json();
+
+                    if (response.ok) {
+                        if (result.sources && result.sources.length > 0) {
+                            listDiv.innerHTML = result.sources.map(source =>
+                                `<div class="website-item"><span>${source}</span><button class="delete-button" onclick="deleteContent('${source}')">Delete</button></div>`
+                            ).join('');
+                        } else {
+                            listDiv.innerHTML = '<div class="website-item">No content stored yet</div>';
+                        }
+                    } else {
+                        listDiv.innerHTML = '<div class="website-item">Error loading content sources</div>';
+                    }
+                } catch (error) {
+                    listDiv.innerHTML = '<div class="website-item">Error: ' + error.message + '</div>';
+                }
+            }
+
+            // Load content sources on page load and show default tab
+            window.onload = function() {
+                refreshContentSources();
+                showTab('website-tab'); // Show the website tab by default
+            };
+        </script>
+    </body>
+    </html>

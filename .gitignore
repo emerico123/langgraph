@@ -1,0 +1,51 @@
+
+# Environments
+.env
+.venv
+env/
+venv/
+ENV/
+env.bak/
+venv.bak/
+
+
+# JetBrains IDEs
+.idea/
+
+# LangGraph specific
+uv.lock
+.langgraph_api/
+
+# RAG Specific exclusions
+chroma_db/
+uploaded_documents/
+
+
+
+# Python
+__pycache__/
+*.so
+
+# Distribution / packaging
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
