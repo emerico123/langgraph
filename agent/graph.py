@@ -36,7 +36,7 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 # Define UPLOAD_DIR for consistent path normalization within graph.py
 UPLOAD_DIR = "./uploaded_documents"
 
-class State(TypedDict):
+class State(TypedDict , total=False):
     messages: Annotated[list, add_messages]
     query: str
     website_url: str | None
@@ -183,7 +183,9 @@ def scrape_website(state: State) -> State:
         
     except Exception as e:
         print(f"Error scraping website: {e}")
-    
+
+    # ✅ Always clear the URL to avoid persistent state
+    state["website_url"] = None
     return state
 
 def search_rag_content(state: State) -> State:
@@ -389,10 +391,25 @@ def check_rag_outcome(state: State) -> str:
         print("RAG chain successfully generated a response. Ending process.")
         return "__end__"
 
+def route_start(state: State) -> str:
+    website_url = state.get("website_url")
+    query = state.get("query")
+
+    if website_url and isinstance(website_url, str) and website_url.strip():
+        return "scrape_website"
+    elif state.get("document_path"):
+        return "process_document"
+    elif query and isinstance(query, str) and query.strip():
+        return "search_rag_content"
+    else:
+        return "__end__"
+
+
 # Rebuild the graph
 graph_builder = StateGraph(State)
 
 # Add nodes
+
 graph_builder.add_node("scrape_website", scrape_website)
 graph_builder.add_node("search_rag_content", search_rag_content)
 graph_builder.add_node("process_document", process_document) # Add process_document node
@@ -401,7 +418,20 @@ graph_builder.add_node("llm_fallback_chain", llm_fallback_chain)
 graph_builder.add_node("check_rag_outcome", check_rag_outcome)
 
 # Add edges and conditional logic
-graph_builder.add_edge(START, "search_rag_content")
+#graph_builder.add_edge(START, "search_rag_content")
+
+
+graph_builder.add_conditional_edges(
+    START,
+    route_start,
+    {
+        "scrape_website": "scrape_website",
+        "process_document": "process_document",
+        "search_rag_content": "search_rag_content",
+        "__end__": END,
+    },
+)
+
 
 # Conditional edge from search_rag_content to route_query
 graph_builder.add_conditional_edges(
