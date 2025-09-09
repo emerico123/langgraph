@@ -188,6 +188,48 @@ def scrape_website(state: State) -> State:
     state["website_url"] = None
     return state
 
+def search_rag_content_messages(state: State) -> State:
+    """Search for relevant content in the RAG database and respond directly."""
+    try:
+        messages = state.get("messages", [])
+
+        # Find the latest HumanMessage to pass to vector search
+        latest_user_message = None
+        for msg in reversed(messages):
+            if isinstance(msg, HumanMessage):
+                latest_user_message = msg.content
+                break
+
+        if not latest_user_message:
+            raise ValueError("No HumanMessage found in messages.")
+
+        # 🔍 Vector search using the last user message
+        docs = vectorstore.similarity_search(latest_user_message, k=5)
+
+        if docs:
+            state["rag_results"] = docs
+            print(f"✅ Found {len(docs)} documents for RAG search.")
+
+            # 📝 Build a simple assistant reply using the top document snippets
+            summary = "\n\n".join(doc.page_content[:200] for doc in docs)
+            assistant_reply = f"Here’s what I found based on your question:\n\n{summary}"
+
+            # 💬 Append AIMessage to the messages list
+            state["messages"] = messages + [AIMessage(content=assistant_reply)]
+            state["should_reroute_to_llm"] = False
+
+        else:
+            print("⚠️ No documents found. Will reroute to LLM.")
+            state["rag_results"] = []
+            state["should_reroute_to_llm"] = True
+
+    except Exception as e:
+        print(f"❌ Error in search_rag_content_messages: {e}")
+        state["rag_results"] = []
+        state["should_reroute_to_llm"] = True
+
+    return state
+
 def search_rag_content(state: State) -> State:
     """Search for relevant content in the RAG database"""
     try:
@@ -397,10 +439,13 @@ def route_start(state: State) -> str:
 
     if website_url and isinstance(website_url, str) and website_url.strip():
         return "scrape_website"
+    elif state.get("messages"):
+        return "search_rag_content_messages"
     elif state.get("document_path"):
         return "process_document"
     elif query and isinstance(query, str) and query.strip():
         return "search_rag_content"
+
     else:
         return "__end__"
 
@@ -412,6 +457,7 @@ graph_builder = StateGraph(State)
 
 graph_builder.add_node("scrape_website", scrape_website)
 graph_builder.add_node("search_rag_content", search_rag_content)
+graph_builder.add_node("search_rag_content_messages" , search_rag_content_messages)
 graph_builder.add_node("process_document", process_document) # Add process_document node
 graph_builder.add_node("rag_chain", rag_chain)
 graph_builder.add_node("llm_fallback_chain", llm_fallback_chain)
@@ -428,10 +474,21 @@ graph_builder.add_conditional_edges(
         "scrape_website": "scrape_website",
         "process_document": "process_document",
         "search_rag_content": "search_rag_content",
+        "search_rag_content_messages": "search_rag_content_messages",
         "__end__": END,
     },
 )
 
+
+# Conditional edge from search_rag_content to route_query
+graph_builder.add_conditional_edges(
+    "search_rag_content_messages",
+    route_query,
+    {
+        "rag_chain": "rag_chain",
+        "llm_fallback_chain": "llm_fallback_chain",
+    },
+)
 
 # Conditional edge from search_rag_content to route_query
 graph_builder.add_conditional_edges(
