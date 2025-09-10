@@ -27,6 +27,18 @@ dependencies = [
     "tabulate>=0.9.0",  # For better table parsing, often useful with Unstructured for CSV/Excel
     "filetype>=1.2.0", # Replaced python-magic
     "langgraph-cli[inmem]>=0.2.8",     # for LangGraph server deployment
+    "fastmcp==2.12.2",
+    "jsonschema-path==0.3.4",
+    "langchain-mcp-adapters==0.1.9",
+    "mcp==1.13.1",
+    "MCPTool==1.0.4",
+    "pinecone==7.3.0",
+    "pinecone-plugin-assistant==1.8.0",
+    "pinecone-plugin-interface==0.0.7",
+    "supabase==2.18.1",
+    "supabase_auth==2.12.3",
+    "supabase_functions==0.10.1",
+    "isodate==0.7.2"
 ]
 
 
