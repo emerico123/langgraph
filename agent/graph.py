@@ -1,10 +1,14 @@
 from __future__ import annotations
 
 import os
+
+
 from typing import Annotated, List, Dict, Any
+
+from langchain.agents import initialize_agent, AgentType
 from typing_extensions import TypedDict
 from dotenv import load_dotenv
-
+from pinecone import Pinecone , ServerlessSpec
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_chroma import Chroma
 from langchain_community.document_loaders import WebBaseLoader, PyPDFLoader, UnstructuredFileLoader
@@ -12,7 +16,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 #from langchain.schema import Document, HumanMessage, AIMessage
 from langchain_core.documents import Document
 from langchain_core.messages import HumanMessage, AIMessage
-from langgraph.graph import StateGraph, START, END
+from langgraph.graph import StateGraph, MessagesState, START, END
 from langgraph.graph.message import add_messages
 #from langchain.schema.runnable import RunnablePassthrough
 from langchain_core.prompts import ChatPromptTemplate
@@ -27,7 +31,12 @@ from langchain_community.embeddings import HuggingFaceEmbeddings
 from langchain_chroma import Chroma
 from openai import RateLimitError, AuthenticationError
 import traceback
+from uuid import uuid4
+from supabase import create_client
 
+from langchain_mcp_adapters.client import MultiServerMCPClient
+from fastmcp import Client, FastMCP
+from langgraph.prebuilt import ToolNode, tools_condition
 
 # Load environment variables
 load_dotenv(override=True)
@@ -35,6 +44,13 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 
 # Define UPLOAD_DIR for consistent path normalization within graph.py
 UPLOAD_DIR = "./uploaded_documents"
+
+
+# Setup Supabase client
+#SUPABASE_URL = "https://wanmahanxxzwpopilhrl.supabase.co"
+#SUPABASE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Indhbm1haGFueHh6d3BvcGlsaHJsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTc0OTMzMDksImV4cCI6MjA3MzA2OTMwOX0.fyX3pVNXWzKlMFmRwyABq-r4FtwDkC4oqBNr2C21qPg"  # Use service role key for insert
+#supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
+
 
 class State(TypedDict , total=False):
     messages: Annotated[list, add_messages]
@@ -65,6 +81,8 @@ vectorstore = Chroma(
     embedding_function=embeddings,
     collection_name="website_content"
 )
+
+#pc = Pinecone(api_key=pinecone_api_key)
 
 text_splitter = RecursiveCharacterTextSplitter(
     chunk_size=1000,
@@ -439,8 +457,10 @@ def route_start(state: State) -> str:
 
     if website_url and isinstance(website_url, str) and website_url.strip():
         return "scrape_website"
+    #elif state.get("messages"):
+        #return "search_rag_content_messages"
     elif state.get("messages"):
-        return "search_rag_content_messages"
+     return "mcp_tools"
     elif state.get("document_path"):
         return "process_document"
     elif query and isinstance(query, str) and query.strip():
@@ -448,6 +468,54 @@ def route_start(state: State) -> str:
 
     else:
         return "__end__"
+
+
+# Async function that calls tools from FastMCP
+async def mcp_tools_node(state: State) -> State:
+
+    try:
+        messages = state.get("messages", [])
+
+        client = MultiServerMCPClient({
+            "fastmcp": {
+                "transport": "streamable_http",  # (1)
+                "url": "https://unsightly-yellow-silkworm.fastmcp.app/mcp",  # (2)
+                "headers": {
+                }
+            }
+        })
+        tools = await client.get_tools()
+
+
+        print("TOOLS=")
+        print(tools)
+
+        latest_user_message = None
+        for msg in reversed(messages):
+            if isinstance(msg, HumanMessage):
+                latest_user_message = msg.content
+                break
+
+        if not latest_user_message:
+            raise ValueError("No HumanMessage found in messages.")
+
+        agent = initialize_agent(
+            tools=tools,
+            llm=llm,
+            agent=AgentType.OPENAI_FUNCTIONS,
+            verbose=True,
+        )
+        response = await agent.arun(latest_user_message)
+        print("*************************************")
+        print(response)
+        state["messages"] = messages + [AIMessage(content=response)]
+        state["should_reroute_to_llm"] = False
+
+    except Exception as e:
+        print(f"❌ Error in mcp_tools_node: {e}")
+        state["should_reroute_to_llm"] = True
+
+    return state
 
 
 # Rebuild the graph
@@ -462,15 +530,20 @@ graph_builder.add_node("process_document", process_document) # Add process_docum
 graph_builder.add_node("rag_chain", rag_chain)
 graph_builder.add_node("llm_fallback_chain", llm_fallback_chain)
 graph_builder.add_node("check_rag_outcome", check_rag_outcome)
-
+graph_builder.add_node("mcp_tools", mcp_tools_node)
 # Add edges and conditional logic
 #graph_builder.add_edge(START, "search_rag_content")
+
+#graph_builder.add_edge(START, "mcp_tools")
+
+
 
 
 graph_builder.add_conditional_edges(
     START,
     route_start,
     {
+        "mcp_tools": "mcp_tools",
         "scrape_website": "scrape_website",
         "process_document": "process_document",
         "search_rag_content": "search_rag_content",
@@ -478,39 +551,39 @@ graph_builder.add_conditional_edges(
         "__end__": END,
     },
 )
-
-
-# Conditional edge from search_rag_content to route_query
-graph_builder.add_conditional_edges(
-    "search_rag_content_messages",
-    route_query,
-    {
-        "rag_chain": "rag_chain",
-        "llm_fallback_chain": "llm_fallback_chain",
-    },
-)
+#graph_builder.add_edge("mcp_tools", END)
 
 # Conditional edge from search_rag_content to route_query
-graph_builder.add_conditional_edges(
-    "search_rag_content",
-    route_query,
-    {
-        "rag_chain": "rag_chain",
-        "llm_fallback_chain": "llm_fallback_chain",
-    },
-)
+#graph_builder.add_conditional_edges(
+ #   "search_rag_content_messages",
+#    route_query,
+#    {
+#        "rag_chain": "rag_chain",
+#        "llm_fallback_chain": "llm_fallback_chain",
+#    },
+#)
+
+# Conditional edge from search_rag_content to route_query
+#graph_builder.add_conditional_edges(
+#    "search_rag_content",
+#    route_query,
+#    {
+#        "rag_chain": "rag_chain",
+#        "llm_fallback_chain": "llm_fallback_chain",
+#    },
+#)
 
 # After rag_chain, check its outcome
-graph_builder.add_conditional_edges(
-    "rag_chain",
-    check_rag_outcome,
-    {
-        "llm_fallback_chain": "llm_fallback_chain",
-        "__end__": END, # If RAG was successful, end the graph
-    },
-)
+#graph_builder.add_conditional_edges(
+#    "rag_chain",
+#    check_rag_outcome,
+#    {
+#        "llm_fallback_chain": "llm_fallback_chain",
+#        "__end__": END, # If RAG was successful, end the graph
+#    },
+#)
 
-graph_builder.add_edge("llm_fallback_chain", END)
+#graph_builder.add_edge("llm_fallback_chain", END)
 
 # Compile the graph
 graph = graph_builder.compile()
@@ -668,3 +741,5 @@ def delete_content_source(source_to_delete: str) -> bool:
     except Exception as e:
         print(f"Error deleting content for source {source_to_delete}: {e}")
         return False
+
+
