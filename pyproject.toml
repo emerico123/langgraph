@@ -11,10 +11,13 @@ requires-python = ">=3.9"
 dependencies = [
     "langgraph>=0.2.6",
     "python-dotenv>=1.0.1",
-    "langchain>=0.2.0",
-    "langchain-openai>=0.1.0",
-    "langchain-community>=0.0.9",      # for WebBaseLoader, PyPDFLoader, UnstructuredFileLoader
-    "langchain-chroma>=0.1.0",         # for ChromaDB vectorstore
+    "langchain>=0.3.0",
+    "langchain-chroma>=0.1.0",   # for ChromaDB vectorstore
+    "langchain-community>=0.3.29",      # for WebBaseLoader, PyPDFLoader, UnstructuredFileLoader
+    "langchain-core==0.3.75",
+    "langchain-mcp-adapters>=0.1.8",
+    "langchain-openai>=0.3.0",
+    "langchain-text-splitters>=0.3.0",
     "beautifulsoup4>=4.12.2",          # for website scraping
     "requests>=2.32.0",                # for website HTTP requests
     "chromadb>=0.4.0",
