@@ -33,7 +33,9 @@ from openai import RateLimitError, AuthenticationError
 import traceback
 from uuid import uuid4
 from supabase import create_client
-
+import aiosmtplib
+from email.mime.text import MIMEText
+from typing import List, Any
 from langchain_mcp_adapters.client import MultiServerMCPClient
 from fastmcp import Client, FastMCP
 from langgraph.prebuilt import ToolNode, tools_condition
@@ -89,6 +91,42 @@ text_splitter = RecursiveCharacterTextSplitter(
     chunk_overlap=200,
     length_function=len,
 )
+
+def format_chat_history(messages: List[Any]) -> str:
+    """Format chat history into email-friendly plain text."""
+    formatted = []
+    for msg in messages:
+        if isinstance(msg, HumanMessage):
+            formatted.append(f"User: {msg.content}")
+        elif isinstance(msg, AIMessage):
+            formatted.append(f"Assistant: {msg.content}")
+    return "\n\n".join(formatted)
+
+async def send_chat_email(chat_body: str, recipient: str, subject: str = "Your Chat Summary"):
+    """Send email using specified SMTP server (acorre.com)."""
+    print("send_chat_email Entered")
+    smtp_host = "acorre.com"
+    smtp_port = 587
+    sender_email = "no-reply@acorre.com"
+    sender_password = "acc19aug22"
+
+    msg = MIMEText(chat_body)
+    msg["Subject"] = subject
+    msg["From"] = sender_email
+    msg["To"] = recipient
+
+    try:
+        await aiosmtplib.send(
+            msg,
+            hostname=smtp_host,
+            port=smtp_port,
+            start_tls=False,
+            username=sender_email,
+            password=sender_password,
+        )
+        print("✅ Email sent successfully (async).")
+    except Exception as e:
+        print(f"❌ Failed to send email: {e}")
 
 # Helper function to canonicalize URLs for consistent storage and retrieval
 def _canonicalize_url(url: str) -> str:
@@ -547,6 +585,16 @@ async def mcp_tools_node(state: State) -> State:
 
         if not latest_user_message:
             raise ValueError("No HumanMessage found in messages.")
+
+        # ✅ Detect end of chat
+        if latest_user_message.lower().strip() in {"end", "quit", "exit", "goodbye"}:
+            print("🛑 Chat ended by user. Sending email.")
+            chat_text = format_chat_history(messages)
+            print(chat_text)
+            print("Going to Send Email")
+            await  send_chat_email(chat_text, "abishek@emerico.biz")
+            state["should_reroute_to_llm"] = False
+            return state
 
         agent = initialize_agent(
             tools=tools,
