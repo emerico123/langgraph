@@ -3,7 +3,7 @@ from __future__ import annotations
 import os
 
 
-from typing import Annotated, List, Dict, Any
+from typing import Annotated, List, Dict, Any, Union
 from langchain.tools import Tool
 from langchain.agents import initialize_agent, AgentType
 from typing_extensions import TypedDict
@@ -102,7 +102,7 @@ def format_chat_history(messages: List[Any]) -> str:
             formatted.append(f"Assistant: {msg.content}")
     return "\n\n".join(formatted)
 
-async def send_chat_email(chat_body: str, recipient: str, subject: str = "Your Chat Summary"):
+async def send_chat_email(chat_body: str, recipients: Union[str, List[str]], subject: str = "Your Chat Summary"):
     """Send email using specified SMTP server (acorre.com)."""
     print("send_chat_email Entered")
     smtp_host = "acorre.com"
@@ -110,10 +110,14 @@ async def send_chat_email(chat_body: str, recipient: str, subject: str = "Your C
     sender_email = "no-reply@acorre.com"
     sender_password = "acc19aug22"
 
+    # If a string is passed, convert to list
+    if isinstance(recipients, str):
+        recipients = [recipients]
+
     msg = MIMEText(chat_body)
     msg["Subject"] = subject
     msg["From"] = sender_email
-    msg["To"] = recipient
+    msg["To"] =  ", ".join(recipients)
 
     try:
         await aiosmtplib.send(
@@ -123,6 +127,7 @@ async def send_chat_email(chat_body: str, recipient: str, subject: str = "Your C
             start_tls=False,
             username=sender_email,
             password=sender_password,
+            recipients=recipients,  # Pass list here for sending
         )
         print("✅ Email sent successfully (async).")
     except Exception as e:
@@ -592,7 +597,7 @@ async def mcp_tools_node(state: State) -> State:
             chat_text = format_chat_history(messages)
             print(chat_text)
             print("Going to Send Email")
-            await  send_chat_email(chat_text, "abishek@emerico.biz")
+            await  send_chat_email(chat_text, ["abishek@emerico.biz" , "abishek@emerico.com"])
             state["should_reroute_to_llm"] = False
             return state
 
