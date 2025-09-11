@@ -543,12 +543,12 @@ graph_builder.add_conditional_edges(
     START,
     route_start,
     {
-        "mcp_tools": "mcp_tools",
         "scrape_website": "scrape_website",
         "process_document": "process_document",
         "search_rag_content": "search_rag_content",
         "search_rag_content_messages": "search_rag_content_messages",
-        "__end__": END,
+        "mcp_tools": "mcp_tools",
+        #"__end__": END,
     },
 )
 #graph_builder.add_edge("mcp_tools", END)
@@ -564,26 +564,26 @@ graph_builder.add_conditional_edges(
 #)
 
 # Conditional edge from search_rag_content to route_query
-#graph_builder.add_conditional_edges(
-#    "search_rag_content",
-#    route_query,
-#    {
-#        "rag_chain": "rag_chain",
-#        "llm_fallback_chain": "llm_fallback_chain",
-#    },
-#)
+graph_builder.add_conditional_edges(
+    "search_rag_content",
+    route_query,
+    {
+        "rag_chain": "rag_chain",
+        "llm_fallback_chain": "llm_fallback_chain",
+    },
+)
 
 # After rag_chain, check its outcome
-#graph_builder.add_conditional_edges(
-#    "rag_chain",
-#    check_rag_outcome,
-#    {
-#        "llm_fallback_chain": "llm_fallback_chain",
-#        "__end__": END, # If RAG was successful, end the graph
-#    },
-#)
+graph_builder.add_conditional_edges(
+    "rag_chain",
+    check_rag_outcome,
+    {
+        "llm_fallback_chain": "llm_fallback_chain",
+        "__end__": END, # If RAG was successful, end the graph
+    },
+)
 
-#graph_builder.add_edge("llm_fallback_chain", END)
+graph_builder.add_edge("llm_fallback_chain", END)
 
 # Compile the graph
 graph = graph_builder.compile()
