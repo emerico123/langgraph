@@ -4,7 +4,7 @@ import os
 
 
 from typing import Annotated, List, Dict, Any
-
+from langchain.tools import Tool
 from langchain.agents import initialize_agent, AgentType
 from typing_extensions import TypedDict
 from dotenv import load_dotenv
@@ -469,6 +469,49 @@ def route_start(state: State) -> str:
     else:
         return "__end__"
 
+def run_rag_tool(query: str) -> str:
+    """Full RAG flow: retrieve documents and generate a response from context."""
+    try:
+        # Step 1: Vector search
+        docs = vectorstore.similarity_search(query, k=5)
+        if not docs:
+            return "No relevant documents found in the RAG database."
+
+        context = "\n\n".join([doc.page_content for doc in docs])
+
+        # Step 2: Construct prompt
+        prompt = ChatPromptTemplate.from_template("""
+        You are a helpful AI assistant. Use the following **retrieved context** to answer the user's question.
+        If the retrieved context doesn't contain enough information to answer the question, clearly state that 
+        you cannot answer based on the provided information, but do not make up an answer.
+
+        Context:
+        {context}
+
+        Question: {query}
+
+        Answer:
+        """)
+
+        # Step 3: Run LLM
+        chain = prompt | llm
+        response = chain.invoke({"context": context, "query": query})
+
+        # Step 4: Fallback detection
+        if "cannot answer based on the provided information" in response.content.lower():
+            return "RAG tool could not confidently answer the question based on available context."
+
+        return response.content
+
+    except Exception as e:
+        return f"❌ Error in RAG tool: {str(e)}"
+
+def create_rag_tool():
+    return Tool.from_function(
+        name="RAGSearch",
+        description="Useful for answering questions based on internal documents.",
+        func=run_rag_tool
+    )
 
 # Async function that calls tools from FastMCP
 async def mcp_tools_node(state: State) -> State:
@@ -486,6 +529,12 @@ async def mcp_tools_node(state: State) -> State:
         })
         tools = await client.get_tools()
 
+
+
+
+        # ✅ Add custom RAG tool
+        rag_tool = create_rag_tool()
+        tools.append(rag_tool)
 
         print("TOOLS=")
         print(tools)
